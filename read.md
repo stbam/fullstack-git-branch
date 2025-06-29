@@ -8,3 +8,6 @@
   "deploy:full": "npm run build:ui && npm run deploy",
   "logs:prod": "echo 'Check logs in Render dashboard — fly logs not available.'"
 }
+
+
+runs in port 5173
