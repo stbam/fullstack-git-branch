@@ -1,7 +1,7 @@
 const express=  require('express')
 var morgan = require('morgan')
 const app=express()
-
+const Person = require('./models/Person')
 app.use(express.json())
 
 
@@ -36,8 +36,10 @@ let persons= [
 app.use(express.json());
 
 app.get('/api/persons',(request,response)=>{
-      response.json(persons)
-   
+     // response.json(persons)
+  Person.find({}).then(people=>{
+    response.json(people)
+  })
 
   // response.json(persons)
    // console.log('"test')
@@ -46,34 +48,73 @@ app.get('/api/persons',(request,response)=>{
 
 
 
-app.get('/api/persons/:id',(request,response)=>{
-    const id = request.params.id
-    const person= persons.find(p=>p.id===id)
+app.get('/api/persons/:id',(request,response,next)=>{
+   /* const id = request.params.id
+   const person= persons.find(p=>p.id===id)
  
 
     if(person){
       response.json(person)
     }else{
         response.status(404).send({error:"person not found"})
-    }
-
+    }*/
   // response.json(persons)
    // console.log('"test')
+ Person.findById(request.params.id).then(person=>{
+  if(person){
+    response.json(person)
+  }else{
+    response.status(404).end()
+  }
+
+ }).catch(error=>next(error))
+
+
 
 }) 
-
-app.get('/api/info',(request,response)=>{
-    const currentTime  = new Date()
-
-    response.send(`<p>phone book has info for 2 people</p>
-          <p>${currentTime}</p>
-        `)
-  
+app.get('/api/info', (request, response, next) => {
+  Person.countDocuments({})
+    .then(count => {
+      const currentTime = new Date()
+      response.send(`<p>Phonebook has info for ${count} people</p><p>${currentTime}</p>`)
+    })
+    .catch(error => next(error))
 })
+
 app.delete('/api/persons/:id',(request,response)=>{
-    const id = request.params.id
+  /*  const id = request.params.id
     persons = persons.filter((person)=>person.id!==id)
-    response.status(204).end()
+    response.status(204).end()*/
+
+    Person.findByIdAndDelete(request.params.id).then(()=>{
+      response.status(204).end()
+
+    }).catch(error=>{
+      console.log(error)
+      response.json(error)
+    })
+})
+
+app.put('/api/persons/:id', (request, response, next) => {
+  const { name, number } = request.body
+  const person = {
+    name,
+    number
+  }
+
+  Person.findByIdAndUpdate(
+    request.params.id,
+    person,
+    { new: true, runValidators: true, context: 'query' }
+  )
+    .then(updatedPerson => {
+      if (updatedPerson) {
+        response.json(updatedPerson)
+      } else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
 })
 
 const generateId=()=>{
@@ -88,13 +129,21 @@ app.post('/api/persons',(request,response)=>{
     if(!body.name || !body.number){
         return response.status(404).json({error:"name or number missing"})
     }
-    const person = {
+    const person = new Person({
+      name:body.name,
+      number: body.number
+    })
+    person.save().then(savedPerson=>{
+        response.json(savedPerson)
+    })
+
+   /* const person = {
         id:generateId(),
         name: body.name,
         number:body.number
     }
     persons=persons.concat(person)
-    response.json(person)
+    response.json(person)*/
 })
 
 const requestLogger = (request, response, next) => {
@@ -118,6 +167,20 @@ morgan.token('body',(req,res)=>{
 
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'));
 
+
+
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  next(error)
+}
+
+
+app.use(errorHandler)
 const PORT = 3002
 app.listen(PORT)
 console.log(`Server running on port ${PORT}`)
